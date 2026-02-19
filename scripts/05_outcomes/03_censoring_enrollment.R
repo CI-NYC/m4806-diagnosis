@@ -15,7 +15,6 @@ library(dplyr)
 library(purrr)
 library(lmtp)
 
-
 source("~/medicaid/M4806-diagnosis-cohort/R/helpers.R")
 
 # Load temporary files from 01_01_filter_continuous_enrollment.R
@@ -39,43 +38,19 @@ for (i in seq_along(files)) {
   # join dt to washout using data table
   dt <- washout[tmp, on = "BENE_ID", nomatch = 0]
   
-  # group by bene_id, define min and max dates
-  dt <- dt[, .(washout_end_dt = first(washout_end_dt),
-               min_dt = min(ENRLMT_START_DT), 
-               max_dt = max(ENRLMT_END_DT)), by = BENE_ID]
-  
-  # defined period_1_end_dt, period_2_end_dt, based on washout_start_dt
-  dt[, `:=`(
-    period_1_end_dt = washout_end_dt + days(30),
-    period_2_end_dt = washout_end_dt + days(60),
-    period_3_end_dt = washout_end_dt + days(90),
-    period_4_end_dt = washout_end_dt + days(120),
-    period_5_end_dt = washout_end_dt + days(150),
-    period_6_end_dt = washout_end_dt + days(180),
-    period_7_end_dt = washout_end_dt + days(210),
-    period_8_end_dt = washout_end_dt + days(240),
-    period_9_end_dt = washout_end_dt + days(270),
-    period_10_end_dt = washout_end_dt + days(300),
-    period_11_end_dt = washout_end_dt + days(330),
-    period_12_end_dt = washout_end_dt + days(360)
-  )]
+  # defined period_1_end_dt, period_2_end_dt, etc. based on washout_start_dt
+  dt[, c(paste0("period_", 1:num_periods, "_end_dt")) := 
+    lapply(1:num_periods, function(p) washout_end_dt + days(p * follow_up_period_length))]
   
   # identify whether each period_end_dt falls within min-max range
-  dt[, `:=`(
-    enrolled_period_1 = as.integer(period_1_end_dt >= min_dt & period_1_end_dt <= max_dt),
-    enrolled_period_2 = as.integer(period_2_end_dt >= min_dt & period_2_end_dt <= max_dt),
-    enrolled_period_3 = as.integer(period_3_end_dt >= min_dt & period_3_end_dt <= max_dt),
-    enrolled_period_4 = as.integer(period_4_end_dt >= min_dt & period_4_end_dt <= max_dt),
-    enrolled_period_5 = as.integer(period_5_end_dt >= min_dt & period_5_end_dt <= max_dt),
-    enrolled_period_6 = as.integer(period_6_end_dt >= min_dt & period_6_end_dt <= max_dt),
-    enrolled_period_7 = as.integer(period_7_end_dt >= min_dt & period_7_end_dt <= max_dt),
-    enrolled_period_8 = as.integer(period_8_end_dt >= min_dt & period_8_end_dt <= max_dt),
-    enrolled_period_9 = as.integer(period_9_end_dt >= min_dt & period_9_end_dt <= max_dt),
-    enrolled_period_10 = as.integer(period_10_end_dt >= min_dt & period_10_end_dt <= max_dt),
-    enrolled_period_11 = as.integer(period_11_end_dt >= min_dt & period_11_end_dt <= max_dt),
-    enrolled_period_12 = as.integer(period_12_end_dt >= min_dt & period_12_end_dt <= max_dt)
-  )]
-  
+  dt <- dt[, lapply(
+    # create a vector of names for the output columns
+    setNames(1:num_periods, paste0("enrolled_period_", 1:num_periods)), 
+    # apply function to each period number, which checks if the corresponding period_end_dt falls within any enrollment period
+    function(p) as.integer(any(
+      get(paste0("period_", p, "_end_dt")) %between% 
+        .(ENRLMT_START_DT, ENRLMT_END_DT)))
+  ), by = BENE_ID]
   
   write_data(
     dt,
@@ -100,7 +75,7 @@ cens_enrollment_df <- bind_rows(results_list) |>
   # now that they are flipped, they should be renamed to censoring columns
   rename_with(~ gsub("enrolled", "cens_enrollment", .x), starts_with("enrolled_period_")) |>
   # ensure that once censored, remain censored
-  lmtp::event_locf(paste0("cens_enrollment_period_", 1:12)) |>
+  lmtp::event_locf(paste0("cens_enrollment_period_", 1:num_periods)) |>
   select(-ends_with("dt"))
 
 

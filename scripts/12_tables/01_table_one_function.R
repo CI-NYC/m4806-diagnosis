@@ -137,11 +137,11 @@ table_one_function <- function(df){
                     "\\textbf{Healthcare Utilization}",
                     "Any inpatient hospitalization",
                     "Outpatient visits",
-                    paste0("\\hspace{0.5cm}", c("1-25", "26-50", ">50")),
+                    paste0("\\hspace{0.5cm}", c("1-25", "26-50", "$>$50")),
                     # "Prescriptions",
                     # paste0("\\hspace{0.5cm}", c("0", "1-10", "11-20", "21-30", "31+")),
                     "Emergency department",
-                    paste0("\\hspace{0.5cm}", c("0", "1-2", ">3")),
+                    paste0("\\hspace{0.5cm}", c("0", "1-2", "$>$3")),
                     "\\textbf{Outcomes (months 1-12)}",
                     "\\hspace{0.5cm}OUD by 12 months",
                     "\\hspace{0.5cm}Uncensored through 12 months"

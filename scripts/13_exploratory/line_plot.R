@@ -12,17 +12,49 @@ source("~/medicaid/M4806-diagnosis-cohort/R/helpers.R")
 cohort <- load_data("inclusion_exclusion_cohort_with_outcomes.fst", file.path(drv_root, "final")) |>
   as.data.table()
 
-opioid_dts <- load_data("exposure_period_opioids.fst", file.path(drv_root, "treatment")) |>
-  select(BENE_ID, treatment_start_dt, treatment_end_dt, treatment_name) |> distinct()
-nop_rx_dts <- load_data("nonopioid_rx_dts.fst", file.path(drv_root, "treatment"))
-nonpharma_dts <- load_data("nonpharma_dts.fst", file.path(drv_root, "treatment")) |>
-  filter(!treatment_name == "Acupuncture")
+# getting opioid category data -------------------------------------------------
+days <- load_data("days_supply.fst", file.path(drv_root, "outcome"))
+mme <- load_data("max_daily_dose_mme.fst", file.path(drv_root, "outcome"))
 
-treatments <- rbind(opioid_dts, nop_rx_dts, nonpharma_dts) |> 
+merged <- days |>
+  left_join(mme, by= "BENE_ID")
+
+opioid_category <- function(days, mme) {
+  case_when(
+    days == 0               ~ "No_opioid",
+    mme <= 50 & days <= 7   ~ "Opioid <=7days <=50mme",
+    mme <= 50 & days > 7    ~ "Opioid >7days <=50mme",
+    mme > 50                ~ "Opioid >50mme"
+  )
+}
+
+opioid_category_df <- map_dfr(1:12, function(month) {
+  days_col <- paste0("mo", month, "_days_supply")
+  mme_col  <- paste0("mo", month, "_max_daily_dose_mme")
+  
+  merged |>
+    fmutate(
+      treatment_name = opioid_category(
+        get(days_col),
+        get(mme_col)
+      )
+    ) |>
+    fselect(BENE_ID, treatment_name) |>
+    mutate(month = month)
+}) |>
+  filter(BENE_ID %in% cohort$BENE_ID,
+         !treatment_name == "No_opioid")
+
+# other treatments -------------------------------------------------------------
+nop_rx_dts <- load_data("nonopioid_rx_dts.fst", file.path(drv_root, "treatment"))
+nonpharma_dts <- load_data("nonpharma_dts.fst", file.path(drv_root, "treatment"))
+
+treatments <- rbind(nop_rx_dts, nonpharma_dts) |> 
   filter(BENE_ID %in% cohort$BENE_ID)
 
 # define which treatments to show in plot
-target_cols <- c("Opioid", "Anti-inflammatory", "Muscle relaxant", 
+target_cols <- c("Opioid <=7days <=50mme", "Opioid >7days <=50mme",
+                 "Opioid >50mme", "Anti-inflammatory", "Muscle relaxant", 
                  "Gabapentin", "Benzodiazepine", "Physical therapy")
 
 
@@ -36,7 +68,8 @@ cohort_month_1 <- cohort |>
              first_treatment_dt + days(29))
   )) |>
   select(BENE_ID, treatment_name) %>%
-  distinct() %>%    
+  distinct() %>%
+  rbind(opioid_category_df |> filter(month == 1) |> select(-month)) |>
   mutate(present = 1) %>%
   pivot_wider(
     id_cols = BENE_ID,
@@ -58,6 +91,7 @@ cohort_month_2 <- cohort |>
   )) |>
   select(BENE_ID, treatment_name) %>%
   distinct() %>%    
+  rbind(opioid_category_df |> filter(month == 2) |> select(-month)) |>
   mutate(present = 1) %>%
   pivot_wider(
     id_cols = BENE_ID,
@@ -79,6 +113,7 @@ cohort_month_3 <- cohort |>
   )) |>
   select(BENE_ID, treatment_name) %>%
   distinct() %>%    
+  rbind(opioid_category_df |> filter(month == 3) |> select(-month)) |>
   mutate(present = 1) %>%
   pivot_wider(
     id_cols = BENE_ID,
@@ -101,6 +136,7 @@ cohort_month_4 <- cohort |>
   )) |>
   select(BENE_ID, treatment_name) %>%
   distinct() %>%    
+  rbind(opioid_category_df |> filter(month == 4) |> select(-month)) |>
   mutate(present = 1) %>%
   pivot_wider(
     id_cols = BENE_ID,
@@ -123,6 +159,7 @@ cohort_month_5 <- cohort |>
   )) |>
   select(BENE_ID, treatment_name) %>%
   distinct() %>%    
+  rbind(opioid_category_df |> filter(month == 5) |> select(-month)) |>
   mutate(present = 1) %>%
   pivot_wider(
     id_cols = BENE_ID,
@@ -145,6 +182,7 @@ cohort_month_6 <- cohort |>
   )) |>
   select(BENE_ID, treatment_name) %>%
   distinct() %>%    
+  rbind(opioid_category_df |> filter(month == 6) |> select(-month)) |>
   mutate(present = 1) %>%
   pivot_wider(
     id_cols = BENE_ID,
@@ -165,6 +203,7 @@ cohort_month_7 <- cohort |>
   )) |>
   select(BENE_ID, treatment_name) %>%
   distinct() %>%    
+  rbind(opioid_category_df |> filter(month == 7) |> select(-month)) |>
   mutate(present = 1) %>%
   pivot_wider(
     id_cols = BENE_ID,
@@ -185,6 +224,7 @@ cohort_month_8 <- cohort |>
   )) |>
   select(BENE_ID, treatment_name) %>%
   distinct() %>%    
+  rbind(opioid_category_df |> filter(month == 8) |> select(-month)) |>
   mutate(present = 1) %>%
   pivot_wider(
     id_cols = BENE_ID,
@@ -205,6 +245,7 @@ cohort_month_9 <- cohort |>
   )) |>
   select(BENE_ID, treatment_name) %>%
   distinct() %>%    
+  rbind(opioid_category_df |> filter(month == 9) |> select(-month)) |>
   mutate(present = 1) %>%
   pivot_wider(
     id_cols = BENE_ID,
@@ -225,6 +266,7 @@ cohort_month_10 <- cohort |>
   )) |>
   select(BENE_ID, treatment_name) %>%
   distinct() %>%    
+  rbind(opioid_category_df |> filter(month == 10) |> select(-month)) |>
   mutate(present = 1) %>%
   pivot_wider(
     id_cols = BENE_ID,
@@ -245,6 +287,7 @@ cohort_month_11 <- cohort |>
   )) |>
   select(BENE_ID, treatment_name) %>%
   distinct() %>%    
+  rbind(opioid_category_df |> filter(month == 11) |> select(-month)) |>
   mutate(present = 1) %>%
   pivot_wider(
     id_cols = BENE_ID,
@@ -265,6 +308,7 @@ cohort_month_12 <- cohort |>
   )) |>
   select(BENE_ID, treatment_name) %>%
   distinct() %>%    
+  rbind(opioid_category_df |> filter(month == 12) |> select(-month)) |>
   mutate(present = 1) %>%
   pivot_wider(
     id_cols = BENE_ID,

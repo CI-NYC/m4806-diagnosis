@@ -12,8 +12,6 @@ library(data.table)
 
 source("~/medicaid/M4806-diagnosis-cohort/R/helpers.R")
 
-
-
 # base cohort
 cohort <- load_data("msk_washout_continuous_enrollment_dts.fst", file.path(drv_root, "exclusion"))
 # opioid naive
@@ -41,33 +39,26 @@ cohort <- list(
   oth_exclusions, 
   oud_exclusions
 ) |> 
-  reduce(join, how = "left") |>
+  reduce(left_join) |>
   mutate(across(everything(), ~ replace_na(., 0)))
 
 # Remove observations with exclusions
 cohort <- filter(cohort, if_all(starts_with("exclusion"), \(x) x == 0))
 
 # Add in exposure, outcome, and censoring data
-cohort <- cohort |>
-  join(treatments, how = "inner") |> # inner-join instead of left-join because after reviewing the cohort, acupuncture counts were too low, so it was removed from the analysis, leaving some people with no treatment. Therefore, these untreated people should be removed
-  join(outcomes, how = "left") |>
-  join(hillary, how = "left") |>
-  # join(ed_visits, how = "left") |>
-  join(cens, how = "left") |>
+cohort <- list(cohort,
+               treatments,
+               outcomes,
+               hillary,
+               cens) |>
+  reduce(left_join) |>
   mutate(across(everything(), ~ replace_na(., 0)))
 
 
 
 cohort <- cohort |>
   select(-starts_with("exclusion"),
-         -ends_with("exposure")) #|>
-  # mutate(oud_period_5 = case_when(cens_period_5 == 0 ~ as.numeric(NA),
-  #                                 TRUE ~ oud_period_5),
-  #        oud_hillary_period_5 = case_when(cens_period_5 == 0 ~ as.numeric(NA),
-  #                                 TRUE ~ oud_hillary_period_5),
-  #        outcome_ed_visit = case_when(cens_period_5 == 0 ~ as.numeric(NA),
-  #                                         TRUE ~ outcome_ed_visit)
-  #        )
+         -ends_with("exposure"))
   
 
 write_data(cohort, "inclusion_exclusion_cohort_with_outcomes.fst", file.path(drv_root, "final"))

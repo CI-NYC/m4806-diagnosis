@@ -11,6 +11,9 @@ library(fst)
 
 drv_root <- "/mnt/general-data/disability/M4806-diagnosis-cohort"
 
+follow_up_period_length <- 30
+num_periods <- 12
+
 write_data <- function(data, file, dir) {
   write_fst(data, file.path(dir, file))
 }
