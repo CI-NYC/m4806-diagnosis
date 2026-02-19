@@ -41,7 +41,7 @@ mediators <- c("Physical therapy",
                # "Counseling",
                # "Massage therapy",
                "Chiropractic",
-               "Acupuncture",
+               # "Acupuncture",
                "Blocks",
                "Ablative techniques", ##
                "Botulinum toxin injections", ## 
@@ -61,7 +61,7 @@ for (mediator in mediators) {
 }
 treatments_df <- treatments_df  |>
   mutate(treatment = ifelse(treatment %in% c("Physical therapy",
-                                             "Acupuncture",
+                                             # "Acupuncture",
                                              "Chiropractic",
                                              "Blocks"), treatment, "Intervention"))
 

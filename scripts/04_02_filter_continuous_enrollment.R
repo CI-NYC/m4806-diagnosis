@@ -85,7 +85,7 @@ find_enrollment_periods <- function(data) {
                       enrollment_end_dt = as.Date(int_end(enrollment_period)))
   }
   
-  out[(washout_start_dt >= enrollment_start_dt) & (washout_end_dt <= enrollment_end_dt)]
+  out[(washout_start_dt >= enrollment_start_dt) & (washout_end_dt < enrollment_end_dt)]
 }
 
 # # Test case
@@ -128,4 +128,4 @@ washout <- merge(washout, cohort)
 write_data(distinct(washout), "msk_washout_continuous_enrollment_dts.fst", file.path(drv_root, "exclusion"))
 # write_data(distinct(washout_7day_gap), "msk_washout_continuous_enrollment_dts_7day_gap.fst", file.path(drv_root, "exclusion"))
 
-# 52 908
+# 52 885

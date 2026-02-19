@@ -1,7 +1,8 @@
 # -------------------------------------
-# Script: 00_censoring.R
-# Author: Nick Williams
-# Purpose: Create censoring indicators
+# Script: censoring_enrollment.R
+# Author: Anton Hung
+# Purpose: creating censoring indicators for each period by identifying whether 
+#           each beneficiary's enrollment dates cover the last day of a given period
 # Notes:
 # -------------------------------------
 
@@ -11,117 +12,99 @@ library(arrow)
 library(lubridate)
 library(foreach)
 library(dplyr)
+library(purrr)
+library(lmtp)
+
 
 source("~/medicaid/M4806-diagnosis-cohort/R/helpers.R")
 
-# reading in cohorts
-cohort <- load_data("msk_washout_continuous_enrollment_dts.fst", file.path(drv_root, "exclusion")) |>
-  select(BENE_ID, first_treatment_dt)
+# Load temporary files from 01_01_filter_continuous_enrollment.R
+files <- file.path(drv_root, "outcome/tmp_post_exposure") |>
+  list.files(full.names = TRUE)
 
-all_enrollment_dates <- load_data("all_possible_enrollment_dates/combined_all_enrolled_dates_cohort_ALL.fst", file.path(drv_root, "outcome")) |>
-  left_join(cohort) |>
-  filter(date >= first_treatment_dt) # only need dates from post-exposure start
+washout <- load_data("msk_washout_continuous_enrollment_dts.fst", file.path(drv_root, "exclusion")) |>
+  select(BENE_ID, washout_end_dt) |>
+  as.data.table()
 
-
-# creating exposure end date periods (each period is 91 days long)
-
-all_enrollment_dates <- all_enrollment_dates |>
-  mutate(period_1_end_dt = first_treatment_dt + days(29),
-         period_2_end_dt = period_1_end_dt + days(30),
-         period_3_end_dt = period_2_end_dt + days(30),
-         period_4_end_dt = period_3_end_dt + days(30),
-         period_5_end_dt = period_4_end_dt + days(30),
-         period_6_end_dt = period_5_end_dt + days(30),
-         period_7_end_dt = period_6_end_dt + days(30),
-         period_8_end_dt = period_7_end_dt + days(30),
-         period_9_end_dt = period_8_end_dt + days(30),
-         period_10_end_dt = period_9_end_dt + days(30),
-         period_11_end_dt = period_10_end_dt + days(30),
-         period_12_end_dt = period_11_end_dt + days(30)
+# evaluating each chunk one at a time
+for (i in seq_along(files)) { 
+  tmp <- readRDS(files[i])
+  
+  # only keep those in the cohort
+  tmp <- tmp[names(tmp) %in% washout$BENE_ID]
+  
+  # combine into 1 large dt
+  tmp <- as.data.table(bind_rows(tmp))
+  
+  # join dt to washout using data table
+  dt <- washout[tmp, on = "BENE_ID", nomatch = 0]
+  
+  # group by bene_id, define min and max dates
+  dt <- dt[, .(washout_end_dt = first(washout_end_dt),
+               min_dt = min(ENRLMT_START_DT), 
+               max_dt = max(ENRLMT_END_DT)), by = BENE_ID]
+  
+  # defined period_1_end_dt, period_2_end_dt, based on washout_start_dt
+  dt[, `:=`(
+    period_1_end_dt = washout_end_dt + days(30),
+    period_2_end_dt = washout_end_dt + days(60),
+    period_3_end_dt = washout_end_dt + days(90),
+    period_4_end_dt = washout_end_dt + days(120),
+    period_5_end_dt = washout_end_dt + days(150),
+    period_6_end_dt = washout_end_dt + days(180),
+    period_7_end_dt = washout_end_dt + days(210),
+    period_8_end_dt = washout_end_dt + days(240),
+    period_9_end_dt = washout_end_dt + days(270),
+    period_10_end_dt = washout_end_dt + days(300),
+    period_11_end_dt = washout_end_dt + days(330),
+    period_12_end_dt = washout_end_dt + days(360)
+  )]
+  
+  # identify whether each period_end_dt falls within min-max range
+  dt[, `:=`(
+    enrolled_period_1 = as.integer(period_1_end_dt >= min_dt & period_1_end_dt <= max_dt),
+    enrolled_period_2 = as.integer(period_2_end_dt >= min_dt & period_2_end_dt <= max_dt),
+    enrolled_period_3 = as.integer(period_3_end_dt >= min_dt & period_3_end_dt <= max_dt),
+    enrolled_period_4 = as.integer(period_4_end_dt >= min_dt & period_4_end_dt <= max_dt),
+    enrolled_period_5 = as.integer(period_5_end_dt >= min_dt & period_5_end_dt <= max_dt),
+    enrolled_period_6 = as.integer(period_6_end_dt >= min_dt & period_6_end_dt <= max_dt),
+    enrolled_period_7 = as.integer(period_7_end_dt >= min_dt & period_7_end_dt <= max_dt),
+    enrolled_period_8 = as.integer(period_8_end_dt >= min_dt & period_8_end_dt <= max_dt),
+    enrolled_period_9 = as.integer(period_9_end_dt >= min_dt & period_9_end_dt <= max_dt),
+    enrolled_period_10 = as.integer(period_10_end_dt >= min_dt & period_10_end_dt <= max_dt),
+    enrolled_period_11 = as.integer(period_11_end_dt >= min_dt & period_11_end_dt <= max_dt),
+    enrolled_period_12 = as.integer(period_12_end_dt >= min_dt & period_12_end_dt <= max_dt)
+  )]
+  
+  
+  write_data(
+    dt,
+    paste0("all_possible_enrollment_dates/combined_all_enrolled_dates_cohort_", sprintf("%02d", i), ".fst"),
+    file.path(drv_root, "outcome")
   )
+}
 
-# creating indicator for each period
+# combining results into a list
+results_list <- list()
+for (i in seq_along(files)){
+  print(i)
+  final_df <- load_data(paste0("outcome/all_possible_enrollment_dates/combined_all_enrolled_dates_cohort_", sprintf("%02d", i), ".fst"), drv_root)
+  
+  results_list[[i]] <- final_df
+}
 
-all_enrollment_dates <- all_enrollment_dates |>
-  mutate(enrolled_during_period_1 = case_when(date >= first_treatment_dt & date <= period_1_end_dt & enrolled == 1 ~ 1,
-                                              TRUE ~ 0),
-         enrolled_during_period_2 = case_when(date >= period_1_end_dt + days(0) & date <= period_2_end_dt & enrolled == 1 ~ 1, # if they were enrolled on the LAST day of the previous period, their censoring should start in this period
-                                              TRUE ~ 0),
-         enrolled_during_period_3 = case_when(date >= period_2_end_dt + days(0) & date <= period_3_end_dt & enrolled == 1 ~ 1, # if they were enrolled on the LAST day of the previous period, their censoring should start in this period
-                                              TRUE ~ 0),
-         enrolled_during_period_4 = case_when(date >= period_3_end_dt + days(0) & date <= period_4_end_dt & enrolled == 1 ~ 1, # if they were enrolled on the LAST day of the previous period, their censoring should start in this period
-                                              TRUE ~ 0),
-         enrolled_during_period_5 = case_when(date >= period_4_end_dt + days(0) & date <= period_5_end_dt & enrolled == 1 ~ 1, # if they were enrolled on the LAST day of the previous period, their censoring should start in this period
-                                              TRUE ~ 0),
-         enrolled_during_period_6 = case_when(date >= period_5_end_dt + days(0) & date <= period_6_end_dt & enrolled == 1 ~ 1, TRUE ~ 0),
-         enrolled_during_period_7 = case_when(date >= period_6_end_dt + days(0) & date <= period_7_end_dt & enrolled == 1 ~ 1, TRUE ~ 0),
-         enrolled_during_period_8 = case_when(date >= period_7_end_dt + days(0) & date <= period_8_end_dt & enrolled == 1 ~ 1, TRUE ~ 0),
-         enrolled_during_period_9 = case_when(date >= period_8_end_dt + days(0) & date <= period_9_end_dt & enrolled == 1 ~ 1, TRUE ~ 0),
-         enrolled_during_period_10 = case_when(date >= period_9_end_dt + days(0) & date <= period_10_end_dt & enrolled == 1 ~ 1, TRUE ~ 0),
-         enrolled_during_period_11 = case_when(date >= period_10_end_dt + days(0) & date <= period_11_end_dt & enrolled == 1 ~ 1, TRUE ~ 0),
-         enrolled_during_period_12 = case_when(date >= period_11_end_dt + days(0) & date <= period_12_end_dt & enrolled == 1 ~ 1, TRUE ~ 0),
-         study_end_dt = first_treatment_dt + days(365),
-         enrolled_during_study_end_dt = case_when(date == study_end_dt & enrolled == 1 ~ 1,
-                                                  TRUE ~ 0),
-  )
-
-all_enrollment_dates_grouped <- all_enrollment_dates |>
-  group_by(BENE_ID) |>
-  summarize(enrollment_cens_period_1 = any(enrolled_during_period_1 == 1),
-            enrollment_cens_period_2 = any(enrolled_during_period_2 == 1),
-            enrollment_cens_period_3 = any(enrolled_during_period_3 == 1),
-            enrollment_cens_period_4 = any(enrolled_during_period_4 == 1),
-            enrollment_cens_period_5 = any(enrolled_during_period_5 == 1),
-            enrollment_cens_period_6 = any(enrolled_during_period_6 == 1),
-            enrollment_cens_period_7 = any(enrolled_during_period_7 == 1),
-            enrollment_cens_period_8 = any(enrolled_during_period_8 == 1),
-            enrollment_cens_period_9 = any(enrolled_during_period_9 == 1),
-            enrollment_cens_period_10 = any(enrolled_during_period_10 == 1),
-            enrollment_cens_period_11 = any(enrolled_during_period_11 == 1),
-            enrollment_cens_period_12 = any(enrolled_during_period_12 == 1),
-            enrollment_cens_study_end_dt = any(enrolled_during_study_end_dt == 1)
-  ) |>
-  mutate(enrollment_cens_period_1 = case_when(enrollment_cens_period_1 == FALSE ~ 1, # disenrolled prior to start of outcome period
-                                              enrollment_cens_period_2 == FALSE ~ 1, # not enrolled at all during next period, then they are censored during this period
-                                              TRUE ~ 0), 
-         enrollment_cens_period_2 =  case_when(enrollment_cens_period_1 == 1 ~ 1,
-                                               enrollment_cens_period_3 == FALSE ~ 1,
-                                               TRUE ~ 0), 
-         enrollment_cens_period_3 =  case_when(enrollment_cens_period_2 == 1 ~ 1,
-                                               enrollment_cens_period_4 == FALSE ~ 1,
-                                               TRUE ~ 0),
-         enrollment_cens_period_4 =  case_when(enrollment_cens_period_3 == 1 ~ 1,
-                                               enrollment_cens_period_5 == FALSE ~ 1,
-                                               TRUE ~ 0), 
-         enrollment_cens_period_5 =  case_when(enrollment_cens_period_4 == 1 ~ 1,
-                                               enrollment_cens_period_6 == FALSE ~ 1,
-                                               TRUE ~ 0), 
-         enrollment_cens_period_6 =  case_when(enrollment_cens_period_5 == 1 ~ 1,
-                                               enrollment_cens_period_7 == FALSE ~ 1,
-                                               TRUE ~ 0), 
-         enrollment_cens_period_7 =  case_when(enrollment_cens_period_6 == 1 ~ 1,
-                                               enrollment_cens_period_8 == FALSE ~ 1,
-                                               TRUE ~ 0), 
-         enrollment_cens_period_8 =  case_when(enrollment_cens_period_7 == 1 ~ 1,
-                                               enrollment_cens_period_9 == FALSE ~ 1,
-                                               TRUE ~ 0), 
-         enrollment_cens_period_9 =  case_when(enrollment_cens_period_8 == 1 ~ 1,
-                                               enrollment_cens_period_10 == FALSE ~ 1,
-                                               TRUE ~ 0), 
-         enrollment_cens_period_10 =  case_when(enrollment_cens_period_9 == 1 ~ 1,
-                                                enrollment_cens_period_11 == FALSE ~ 1,
-                                               TRUE ~ 0), 
-         enrollment_cens_period_11 =  case_when(enrollment_cens_period_10 == 1 ~ 1,
-                                                enrollment_cens_period_12 == FALSE ~ 1,
-                                               TRUE ~ 0), 
-         enrollment_cens_period_12 =  case_when(enrollment_cens_period_11 == 1 ~ 1,
-                                               enrollment_cens_study_end_dt == FALSE ~ 1,
-                                               TRUE ~ 0)
-         
-  ) |>
-  select(-enrollment_cens_study_end_dt)
+# combining list into a dataframe
+cens_enrollment_df <- bind_rows(results_list) |>
+  # flip enrollment indicators to censoring indicators
+  mutate(across(starts_with("enrolled_period_"), ~ 1 - .x)) |>
+  # now that they are flipped, they should be renamed to censoring columns
+  rename_with(~ gsub("enrolled", "cens_enrollment", .x), starts_with("enrolled_period_")) |>
+  # ensure that once censored, remain censored
+  lmtp::event_locf(paste0("cens_enrollment_period_", 1:12)) |>
+  select(-ends_with("dt"))
 
 
-write_data(all_enrollment_dates_grouped, "all_possible_enrollment_dates/censoring_enrollment.fst", file.path(drv_root, "outcome"))
-
-
+write_data(
+  cens_enrollment_df,
+  "enrollment_by_period.fst", file.path(drv_root, "outcome")
+)

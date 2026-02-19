@@ -150,8 +150,7 @@ dual_cens2 <-
   mutate(across(starts_with("dual_elig2_cens"), replace_na)) |> 
   select(BENE_ID, starts_with("dual_elig2_cens"))
 
-enrollment_cens <- load_data("all_possible_enrollment_dates/censoring_enrollment.fst", file.path(drv_root, "outcome")) |>
-  filter(BENE_ID %in% c(cohort$BENE_ID))
+enrollment_cens <- load_data("enrollment_by_period.fst", file.path(drv_root, "outcome"))
 
 cens <- 
   list(

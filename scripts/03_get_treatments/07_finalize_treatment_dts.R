@@ -45,4 +45,4 @@ cohort_dts <- cohort |>
 
 write_data(cohort_dts, "m4806_cohort_treatment_dts.fst", file.path(drv_root, "exclusion"))
 
-# 90 326 people are treated (out of a possible 122 192)
+# 90 307 people are treated (out of a possible 122 192)

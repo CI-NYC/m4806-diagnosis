@@ -72,4 +72,4 @@ cohort <- cohort |>
 
 write_data(cohort, "inclusion_exclusion_cohort_with_outcomes.fst", file.path(drv_root, "final"))
 
-# 12740
+# 12745
