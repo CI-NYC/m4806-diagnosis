@@ -76,15 +76,21 @@ df <- data |>
   mutate(month = as.numeric(month)) |>
   group_by(BENE_ID) |>
   # arrange(month) |>
-  mutate(change = highrisk - lag(highrisk)) |> # +1 indicates a change from low to high risk. -1 indicates change from high to low risk
+  mutate(change = case_when(
+    lag(highrisk) == 0 & highrisk == 1 ~ "Risk increase",  # became high risk
+    lag(highrisk) == 1 & highrisk == 0 ~ "Risk decrease",  # became low risk
+    lag(highrisk) == 1 & highrisk == 1 ~ "Remained high risk",  # stayed high
+    lag(highrisk) == 0 & highrisk == 0 ~ "Remained low risk",  # stayed low
+    )) |>
   filter(!is.na(change))
+
 
 df <- df |>
   group_by(month, change) |>
   summarise(percent = n(), .groups = "drop_last") |>
   mutate(prop = percent / sum(percent) * 100) |>
   ungroup() |>
-  mutate(change = factor(change, levels = c("1", "0", "-1")))
+  mutate(change = factor(change, levels = c("Risk increase", "Remained high risk", "Remained low risk", "Risk decrease")))
 
 df_rib <- df |>
   group_by(month) |>
@@ -132,7 +138,7 @@ p3 <- ggplot(df_rib) +
     color = "black",
     size = 3
   ) +
-  scale_fill_manual(values = c("blue", "white", "red")) +
+  scale_fill_manual(values = c("blue", "lightblue", "pink", "red")) +
     labs(x = "Month",
          y = "Group percentages") +
     scale_x_discrete(limits = as.character(1:12)) +
