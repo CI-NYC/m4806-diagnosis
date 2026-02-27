@@ -33,13 +33,13 @@ get_monthly_treatments <- function(cohort_df, treatment_df, month_idx) {
   # 1. Filter for overlaps in the specific window
   treatments_in_month <- cohort_df |>
     left_join(treatment_df, by = "BENE_ID") |>
-    filter(int_overlaps(
+    fsubset(int_overlaps(
       interval(treatment_start_dt, treatment_end_dt),
       interval(first_treatment_dt + days(day_start), 
                first_treatment_dt + days(day_end))
     )) |>
-    select(BENE_ID, treatment_name) |>
-    distinct()
+    fselect(BENE_ID, treatment_name) |>
+    funique()
   
   # 2. Create the wide format and combinations
   summary_df <- treatments_in_month |>
@@ -48,14 +48,14 @@ get_monthly_treatments <- function(cohort_df, treatment_df, month_idx) {
       treatment_combination = str_flatten(sort(unique(treatment_name)), collapse = ", "),
       treatment_name = treatment_name
     ) |>
-    mutate(present = 1) |>
+    fmutate(present = 1) |>
     pivot_wider(
       names_from = treatment_name,
       values_from = present,
       values_fill = 0
     ) |>
     rename_with(
-      .fn = ~ paste0("mo", month_idx, "_", .x), 
+      .fn = ~ paste0("mo", month_idx, "_", .x),
       .cols = -BENE_ID
     ) |>
     ungroup()
@@ -63,7 +63,8 @@ get_monthly_treatments <- function(cohort_df, treatment_df, month_idx) {
   return(summary_df)
 }
 
-final <- list(get_monthly_treatments(cohort, treatments, 1),
+final <- list(opioid_category,
+              get_monthly_treatments(cohort, treatments, 1),
               get_monthly_treatments(cohort, treatments, 2),
               get_monthly_treatments(cohort, treatments, 3),
               get_monthly_treatments(cohort, treatments, 4),
@@ -75,13 +76,36 @@ final <- list(get_monthly_treatments(cohort, treatments, 1),
               get_monthly_treatments(cohort, treatments, 10),
               get_monthly_treatments(cohort, treatments, 11),
               get_monthly_treatments(cohort, treatments, 12)) |>
-  reduce(join, how="left")
-
-final <- list(days,
-              mme,
-              opioid_category) |>
   reduce(left_join) |>
-  left_join(final)
+  as.data.table()
+
+# 3. Modification to evaluation of treatments: create a single time-varying binary treatment.
+#     This will be calculated as so:
+#     The lack of any of the higher risk treatments (”Opioid >7days ≤50mme”, 
+#     ”Opioid >50mme”, ”Gabapentin”, ”Benzodiazepine”) implies the presence of 
+#     one or more of the remaining lower risk treatments. When this occurs, 
+#     indicate this with a 0 for our new variable. On the other hand, if a
+#     high risk treatment exists, indicate this with a 1.
+
+
+final[, (paste0("mo", seq_len(num_periods), "_highrisk")) :=
+  lapply(seq_len(num_periods), function(i) {
+    high_risk_treatment <- paste0("mo",i,"_",c("Opioid_g50mme", 
+                                                "Opioid_g7days_le50mme", 
+                                                "Benzodiazepine", 
+                                                "Gabapentin"))
+    as.integer(rowSums(.SD[, high_risk_treatment, with=F], na.rm=T) > 0)
+    })
+]
+
+final <- final[,
+  c("BENE_ID", paste0("mo",seq_len(num_periods),"_highrisk")), with=F
+]
+
+final <- list(final,
+              days,
+              mme) |>
+  reduce(left_join)
 
 # numeric_sums <- colSums(select(final, where(is.numeric), -"BENE_ID"), na.rm = TRUE)
 

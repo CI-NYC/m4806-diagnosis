@@ -1,9 +1,6 @@
 library(tidyverse)
 library(fst)
 library(lubridate)
-library(data.table)
-library(foreach)
-library(doFuture)
 library(collapse)
 
 
