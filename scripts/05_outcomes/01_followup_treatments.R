@@ -87,21 +87,43 @@ final <- list(opioid_category,
 #     indicate this with a 0 for our new variable. On the other hand, if a
 #     high risk treatment exists, indicate this with a 1.
 
-
-final[, (paste0("mo", seq_len(num_periods), "_highrisk")) :=
-  lapply(seq_len(num_periods), function(i) {
-    high_risk_treatment <- paste0("mo",i,"_",c("Opioid_g50mme", 
-                                                "Opioid_g7days_le50mme", 
-                                                "Benzodiazepine", 
-                                                "Gabapentin"))
-    as.integer(rowSums(.SD[, high_risk_treatment, with=F], na.rm=T) > 0)
-    })
+# new column "mo{}_highrisk" records whether any of the 4 high risk treatments are present in a month
+# new column "mo{}_treated" records whether any treatment at all is present in a month
+final[, c(paste0("mo", seq_len(num_periods), "_highrisk"), 
+          paste0("mo", seq_len(num_periods), "_treated")) :=
+        {
+          # first vector: any high-risk treatment
+          highrisk_col <- lapply(seq_len(num_periods), function(i) {
+            high_risk_treatment <- paste0("mo", i, "_",
+                                          c("Opioid_g50mme",
+                                            "Opioid_g7days_le50mme",
+                                            "Benzodiazepine",
+                                            "Gabapentin"))
+            as.integer(rowSums(.SD[, high_risk_treatment, with = FALSE],
+                               na.rm = TRUE) > 0)
+          })
+          
+          # second vector: any treatment at all
+          treated_col <- lapply(seq_len(num_periods), function(i) {
+            any_treatment <- grep(paste0("^mo", i, "_"), names(final), value = TRUE)
+            any_treatment <- any_treatment[!grepl("treatment_combination$", any_treatment)]
+            as.integer(rowSums(.SD[, any_treatment, with = FALSE],
+                               na.rm = TRUE) > 0)
+          })
+          
+          c(highrisk_col, treated_col)
+        }
 ]
 
+
+# keep only these columns
 final <- final[,
-  c("BENE_ID", paste0("mo",seq_len(num_periods),"_highrisk")), with=F
+  c("BENE_ID", 
+    paste0("mo",seq_len(num_periods),"_highrisk"), 
+    paste0("mo",seq_len(num_periods),"_treated")), with=F
 ]
 
+# add opioid data - just to not lose this information
 final <- list(final,
               days,
               mme) |>
