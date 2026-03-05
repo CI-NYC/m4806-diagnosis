@@ -2,6 +2,7 @@ library(tidyverse)
 library(fst)
 library(lubridate)
 library(collapse)
+library(data.table)
 
 source("~/medicaid/M4806-diagnosis-cohort/R/helpers.R")
 
@@ -22,7 +23,6 @@ data <- data |>
   ) |>
   # remove mo and _highrisk from month variable and convert to numeric
   mutate(month = str_remove(month, "mo"),
-         month = str_remove(month, "_highrisk"), 
          month = as.numeric(month),
          highrisk = ifelse(cens==0, NA, highrisk),
          treated = ifelse(cens==0, NA, treated)) |>
