@@ -116,12 +116,12 @@ final[, c(paste0("mo", seq_len(num_periods), "_highrisk"),
 ]
 
 
-# keep only these columns
-final <- final[,
-  c("BENE_ID", 
-    paste0("mo",seq_len(num_periods),"_highrisk"), 
-    paste0("mo",seq_len(num_periods),"_treated")), with=F
-]
+# # keep only these columns
+# final <- final[,
+#   c("BENE_ID", 
+#     paste0("mo",seq_len(num_periods),"_highrisk"), 
+#     paste0("mo",seq_len(num_periods),"_treated")), with=F
+# ]
 
 # add opioid data - just to not lose this information
 final <- list(final,

@@ -7,17 +7,16 @@ library(doFuture)
 library(collapse)
 
 
-source("~/medicaid/M4806-diagnosis-cohort/R/helpers.R")
+source("~/medicaid/M9901-diagnosis-cohort/R/helpers.R")
 
-cohort <- load_data("msk_washout_continuous_enrollment_dts.fst", file.path(drv_root, "exclusion")) |>
+cohort <- load_data("washout_continuous_enrollment_dts.fst", file.path(drv_root, "exclusion")) |>
   as.data.table()
 
 days <- load_data("days_supply.fst", file.path(drv_root, "outcome"))
 mme <- load_data("max_daily_dose_mme.fst", file.path(drv_root, "outcome"))
 opioid_category <- load_data("opioid_category.fst", file.path(drv_root, "outcome"))
-nop_rx_dts <- load_data("nonopioid_rx_dts.fst", file.path(drv_root, "treatment"))
-nonpharma_dts <- load_data("nonpharma_dts.fst", file.path(drv_root, "treatment")) |>
-  filter(!treatment_name == "Acupuncture")
+nop_rx_dts <- load_data("nonopioid_rx_dts.fst", file.path(drv_root, "exclusion"))
+nonpharma_dts <- load_data("nonpharma_dts.fst", file.path(drv_root, "exclusion"))
 
 treatments <- rbind(nop_rx_dts, nonpharma_dts) |> 
   filter(BENE_ID %in% cohort$BENE_ID)
@@ -27,16 +26,16 @@ get_monthly_treatments <- function(cohort_df, treatment_df, month_idx) {
   
   # Calculate window boundaries based on 30-day increments
   # Month 1: 0 to 29 | Month 2: 30 to 59, etc.
-  day_start <- (month_idx - 1) * 30
-  day_end   <- (month_idx * 30) - 1
+  day_start <- (month_idx - 1) * follow_up_period_length
+  day_end   <- (month_idx * follow_up_period_length) - 1
   
   # 1. Filter for overlaps in the specific window
   treatments_in_month <- cohort_df |>
     left_join(treatment_df, by = "BENE_ID") |>
     fsubset(int_overlaps(
       interval(treatment_start_dt, treatment_end_dt),
-      interval(first_treatment_dt + days(day_start), 
-               first_treatment_dt + days(day_end))
+      interval(day0_dt + days(day_start), 
+               day0_dt + days(day_end))
     )) |>
     fselect(BENE_ID, treatment_name) |>
     funique()

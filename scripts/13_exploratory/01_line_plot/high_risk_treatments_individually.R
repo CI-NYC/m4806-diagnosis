@@ -3,6 +3,7 @@ library(fst)
 library(lubridate)
 library(collapse)
 library(data.table)
+library(gridExtra)
 
 source("~/medicaid/M4806-diagnosis-cohort/R/helpers.R")
 
@@ -58,7 +59,7 @@ df <- data |>
 p1 <- ggplot(df, aes(x=month, y=percent)) +
   geom_area(fill = "skyblue", alpha = 0.3) +
   geom_point(size=4) +
-  geom_text(aes(label = round(percent, 3)*100, vjust = -0.8)) +
+  geom_text(aes(label = round(percent, 3)*100, vjust = 2)) +
   labs(x="Month",
        y="Patients (%)") +
   facet_wrap(~ treatment) +
@@ -66,7 +67,7 @@ p1 <- ggplot(df, aes(x=month, y=percent)) +
   theme_light() +
   theme(strip.text = element_text(color = "black"))
 
-ggsave("~/medicaid/M4806-diagnosis-cohort/scripts/13_exploratory/01_line_plot/treatment_percentages_faceted_withcens.pdf", p1, width=15, height=9)
+ggsave("~/medicaid/M4806-diagnosis-cohort/scripts/13_exploratory/01_line_plot/treatment_percentages_faceted_withcens.pdf", p1, width=10, height=6)
 
 
 # 2. Proportion of people with high risk treatment, among treated
@@ -85,7 +86,7 @@ df <- data |>
 p2 <- ggplot(df, aes(x=month, y=percent)) +
   geom_area(fill = "skyblue", alpha = 0.3) +
   geom_point(size=4) +
-  geom_text(aes(label = round(percent, 3)*100, vjust = -0.8)) +
+  geom_text(aes(label = round(percent, 3)*100, vjust = 2)) +
   labs(x="Month",
        y="Patients (%)") +
   facet_wrap(~ treatment) +
@@ -93,7 +94,7 @@ p2 <- ggplot(df, aes(x=month, y=percent)) +
   theme_light() +
   theme(strip.text = element_text(color = "black"))
 
-ggsave("~/medicaid/M4806-diagnosis-cohort/scripts/13_exploratory/01_line_plot/treatment_percentages_faceted_amongtreated.pdf", p2, width=10, height=5.5)
+ggsave("~/medicaid/M4806-diagnosis-cohort/scripts/13_exploratory/01_line_plot/treatment_percentages_faceted_amongtreated.pdf", p2, width=10, height=6)
 
 
 
@@ -148,8 +149,62 @@ p3 <- ggplot(df_rib) +
   scale_x_discrete(limits = as.character(1:12)) +
   theme_light()
 
-ggsave("~/medicaid/M4806-diagnosis-cohort/scripts/13_exploratory/01_line_plot/change_in_gabapentin.pdf", p3, width=10, height=5.5)
+# ggsave("~/medicaid/M4806-diagnosis-cohort/scripts/13_exploratory/01_line_plot/change_in_gabapentin.pdf", p3, width=10, height=5.5)
 
+
+
+# 3b. calculating change at every month (Benzodiazepine)
+df <- data |>
+  group_by(BENE_ID) |>
+  mutate(change = case_when(
+    cens==0 ~ "Censored",
+    treated==0 ~ "Untreated",
+    lag(Benzodiazepine) == 0 & Benzodiazepine == 1 ~ "+ benzodiazepine",  # became high risk
+    lag(Benzodiazepine) == 1 & Benzodiazepine == 0 ~ "- benzodiazepine",  # became low risk
+    lag(Benzodiazepine) == 1 & Benzodiazepine == 1 ~ "still on benzodiazepine",  # stayed high
+    lag(Benzodiazepine) == 0 & Benzodiazepine == 0 ~ "still off benzodiazepine",  # stayed low
+  )) |>
+  filter(!month==1)
+
+
+df <- df |>
+  group_by(month, change) |>
+  summarise(percent = n(), .groups = "drop_last") |>
+  mutate(prop = percent / sum(percent) * 100) |>
+  ungroup() |>
+  mutate(change = factor(change, levels = c("+ benzodiazepine", "still on benzodiazepine", "still off benzodiazepine", "- benzodiazepine", "Untreated", "Censored")))
+
+df_rib <- df |>
+  group_by(month) |>
+  arrange(change) |>
+  mutate(
+    ymin = lag(cumsum(prop), default = 0),
+    ymax = cumsum(prop)
+  ) |>
+  filter(!month == 1)
+
+
+p4 <- ggplot(df_rib) +
+  geom_ribbon(aes(x = month, ymin = ymin, ymax = ymax, fill = change), alpha = 0.6) +
+  geom_text(
+    data = df |>
+      group_by(month) |>
+      arrange(change) |>
+      mutate(
+        cum = cumsum(prop),
+        mid = cum - prop/2        # vertical midpoint of each band
+      ),
+    aes(x = month, y = mid, label = round(prop,1)),
+    color = "black",
+    size = 3
+  ) +
+  scale_fill_manual(values = c("red", "pink", "lightblue", "blue", "grey","grey25")) +
+  labs(x = "Month",
+       y = "Group percentages") +
+  scale_x_discrete(limits = as.character(1:12)) +
+  theme_light()
+
+# ggsave("~/medicaid/M4806-diagnosis-cohort/scripts/13_exploratory/01_line_plot/change_in_benzodiazepine.pdf", p4, width=10, height=5.5)
 
 
 
@@ -184,7 +239,7 @@ df_rib <- df |>
   filter(!month == 1)
 
 
-p3 <- ggplot(df_rib) +
+p5 <- ggplot(df_rib) +
   geom_ribbon(aes(x = month, ymin = ymin, ymax = ymax, fill = change), alpha = 0.6) +
   geom_text(
     data = df |>
@@ -204,7 +259,7 @@ p3 <- ggplot(df_rib) +
   scale_x_discrete(limits = as.character(1:12)) +
   theme_light()
 
-ggsave("~/medicaid/M4806-diagnosis-cohort/scripts/13_exploratory/01_line_plot/change_in_Opioid>50mme.pdf", p3, width=10, height=5.5)
+# ggsave("~/medicaid/M4806-diagnosis-cohort/scripts/13_exploratory/01_line_plot/change_in_Opioid>50mme.pdf", p5, width=10, height=5.5)
 
 
 
@@ -239,7 +294,7 @@ df_rib <- df |>
   filter(!month == 1)
 
 
-p3 <- ggplot(df_rib) +
+p6 <- ggplot(df_rib) +
   geom_ribbon(aes(x = month, ymin = ymin, ymax = ymax, fill = change), alpha = 0.6) +
   geom_text(
     data = df |>
@@ -259,4 +314,10 @@ p3 <- ggplot(df_rib) +
   scale_x_discrete(limits = as.character(1:12)) +
   theme_light()
 
-ggsave("~/medicaid/M4806-diagnosis-cohort/scripts/13_exploratory/01_line_plot/change_in_Opioid>7days<=50mme.pdf", p3, width=10, height=5.5)
+# ggsave("~/medicaid/M4806-diagnosis-cohort/scripts/13_exploratory/01_line_plot/change_in_Opioid>7days<=50mme.pdf", p6, width=10, height=5.5)
+
+
+
+g <- grid.arrange(p4, p3, p5, p6, ncol = 2)
+
+ggsave("~/medicaid/M4806-diagnosis-cohort/scripts/13_exploratory/01_line_plot/change_in_treatment_faceted.pdf", g, width = 15, height = 6)
