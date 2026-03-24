@@ -7,7 +7,7 @@ library(doFuture)
 library(collapse)
 
 
-source("~/medicaid/M9901-diagnosis-cohort/R/helpers.R")
+source("~/medicaid/M4806-diagnosis-cohort/R/helpers.R")
 
 cohort <- load_data("washout_continuous_enrollment_dts.fst", file.path(drv_root, "exclusion")) |>
   as.data.table()

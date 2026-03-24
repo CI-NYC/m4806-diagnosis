@@ -8,6 +8,7 @@
 library(tidyverse)
 library(glue)
 library(fst)
+library(collapse)
 
 source("~/medicaid/M4806-diagnosis-cohort/R/helpers.R")
 

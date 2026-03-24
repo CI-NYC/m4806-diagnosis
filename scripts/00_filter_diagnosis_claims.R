@@ -21,7 +21,7 @@ oth <- open_oth()
 # iph <- open_iph()
 
 codes <- "M4806"
-codes_inpatient <- c(13, 21, 32, 24, 55, 31, 09, 41)
+codes_inpatient <- c(13, 21, 32, 24, 55, 31, 09, 51)
 
 start_dt <- as.Date("2016-01-01")
 end_dt <- as.Date("2019-12-31")
@@ -103,4 +103,4 @@ setnames(msk, "SRVC_BGN_DT", "msk_diagnosis_dt")
 write_data(as.data.table(distinct(msk)), "m4806_washout_dts.fst", file.path(drv_root, "exclusion"))
 
 # number of people with MSK pain claims
-msk |> distinct() |> nrow() # 122,192
+msk |> distinct() |> nrow() # 122775

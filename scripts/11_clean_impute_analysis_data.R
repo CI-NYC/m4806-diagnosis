@@ -86,7 +86,7 @@ df[, `:=`(dem_sex_m = fifelse(dem_sex == "M", 1, 0), # Sex (reference category s
           dem_ssi_benefits_mandatory_optional = fifelse(
             dem_ssi_benefits == "Mandatory or optional", 1, 0))]
 
-df <- df[, -c("last_treatment_dt", "dem_race", "dem_household_size", "dem_ssi_benefits", "dem_sex")]
+# df <- df[, -c("last_treatment_dt", "dem_race", "dem_household_size", "dem_ssi_benefits", "dem_sex")]
 
 write_data(df, "msk_cohort_clean_imputed.fst", file.path(drv_root, "final"))
 
